@@ -39,12 +39,21 @@
                                     <action selector="preloadUniMP:" destination="BYZ-38-t0r" eventType="touchUpInside" id="PBg-eW-S7b"/>
                                 </connections>
                             </button>
+                            <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="kLm-3N-9pQ">
+                                <rect key="frame" x="127" y="553" width="160" height="30"/>
+                                <state key="normal" title="网络下载运行小程序"/>
+                                <connections>
+                                    <action selector="downloadAndRunUniMP:" destination="BYZ-38-t0r" eventType="touchUpInside" id="aB8-cD-eFg"/>
+                                </connections>
+                            </button>
                         </subviews>
                         <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
                         <constraints>
                             <constraint firstItem="Xs5-zv-5kf" firstAttribute="centerY" secondItem="8bC-Xf-vdC" secondAttribute="centerY" id="1Wn-z4-Gfa"/>
                             <constraint firstItem="jah-BZ-wvn" firstAttribute="top" secondItem="Xs5-zv-5kf" secondAttribute="bottom" constant="30" id="JwW-IS-Zmo"/>
                             <constraint firstItem="jah-BZ-wvn" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="MwG-fu-U65"/>
+                            <constraint firstItem="kLm-3N-9pQ" firstAttribute="top" secondItem="jah-BZ-wvn" secondAttribute="bottom" constant="30" id="nEw-1A-2bC"/>
+                            <constraint firstItem="kLm-3N-9pQ" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="nEw-2B-3cD"/>
                             <constraint firstItem="Xs5-zv-5kf" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="bMj-K5-naN"/>
                             <constraint firstItem="9kB-md-4qx" firstAttribute="centerX" secondItem="8bC-Xf-vdC" secondAttribute="centerX" id="bSc-4E-5RX"/>
                             <constraint firstItem="Xs5-zv-5kf" firstAttribute="top" secondItem="9kB-md-4qx" secondAttribute="bottom" constant="50" id="et1-Mt-0oQ"/>

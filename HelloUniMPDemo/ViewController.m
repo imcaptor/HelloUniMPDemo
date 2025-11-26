@@ -15,6 +15,8 @@
 @interface ViewController () <DCUniMPSDKEngineDelegate>
 
 @property (nonatomic, weak) DCUniMPInstance *uniMPInstance; /**< 保存当前打开的小程序应用的引用 注意：请使用 weak 修辞，否则应在关闭小程序时置为 nil */
+@property (nonatomic, strong) NSURLSessionDownloadTask *downloadTask; /**< 下载任务 */
+@property (nonatomic, copy) NSString *downloadedAppId; /**< 下载的小程序 AppId */
 
 @end
 
@@ -199,6 +201,186 @@
     if (callback) {
         callback(@"native callback message",NO);
     }
+}
+
+#pragma mark - 网络下载小程序
+/// 从网络下载并运行小程序
+- (IBAction)downloadAndRunUniMP:(id)sender {
+    // 默认下载地址（您可以替换为实际的 URL）
+    NSString *downloadURL = @"https://example.com/your-app.wgt";
+    NSString *appId = @"__UNI__DOWNLOAD"; // 从网络下载的小程序 AppId
+    
+    // 弹出输入框让用户输入下载地址
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"下载小程序" 
+                                                                   message:@"请输入小程序 .wgt 文件的下载地址" 
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    
+    [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
+        textField.placeholder = @"https://example.com/app.wgt";
+        textField.text = downloadURL;
+    }];
+    
+    [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
+        textField.placeholder = @"AppId (例如: __UNI__DOWNLOAD)";
+        textField.text = appId;
+    }];
+    
+    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"取消" 
+                                                           style:UIAlertActionStyleCancel 
+                                                         handler:nil];
+    
+    UIAlertAction *downloadAction = [UIAlertAction actionWithTitle:@"下载" 
+                                                             style:UIAlertActionStyleDefault 
+                                                           handler:^(UIAlertAction * _Nonnull action) {
+        NSString *url = alert.textFields[0].text;
+        NSString *appid = alert.textFields[1].text;
+        
+        if (url.length > 0 && appid.length > 0) {
+            [self downloadWgtFileFromURL:url appId:appid];
+        } else {
+            [self showAlertWithTitle:@"错误" message:@"请输入有效的 URL 和 AppId"];
+        }
+    }];
+    
+    [alert addAction:cancelAction];
+    [alert addAction:downloadAction];
+    
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+/// 下载 .wgt 文件
+- (void)downloadWgtFileFromURL:(NSString *)urlString appId:(NSString *)appId {
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (!url) {
+        [self showAlertWithTitle:@"错误" message:@"URL 格式不正确"];
+        return;
+    }
+    
+    // 显示加载提示
+    UIAlertController *loadingAlert = [UIAlertController alertControllerWithTitle:@"下载中" 
+                                                                          message:@"正在下载小程序，请稍候..." 
+                                                                   preferredStyle:UIAlertControllerStyleAlert];
+    [self presentViewController:loadingAlert animated:YES completion:nil];
+    
+    // 创建下载任务
+    NSURLSessionConfiguration *configuration = [NSURLSessionConfiguration defaultSessionConfiguration];
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:configuration];
+    
+    __weak __typeof(self)weakSelf = self;
+    self.downloadTask = [session downloadTaskWithURL:url completionHandler:^(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [loadingAlert dismissViewControllerAnimated:YES completion:nil];
+            
+            if (error) {
+                NSLog(@"下载失败：%@", error);
+                [weakSelf showAlertWithTitle:@"下载失败" message:error.localizedDescription];
+                return;
+            }
+            
+            // 获取下载的临时文件路径
+            if (location) {
+                [weakSelf installDownloadedWgt:location appId:appId];
+            }
+        });
+    }];
+    
+    [self.downloadTask resume];
+}
+
+/// 安装下载的 .wgt 文件
+- (void)installDownloadedWgt:(NSURL *)tempFileURL appId:(NSString *)appId {
+    // 将临时文件复制到应用的 Documents 目录
+    NSString *documentsPath = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+    NSString *destinationPath = [documentsPath stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.wgt", appId]];
+    
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    
+    // 如果文件已存在，先删除
+    if ([fileManager fileExistsAtPath:destinationPath]) {
+        [fileManager removeItemAtPath:destinationPath error:nil];
+    }
+    
+    NSError *copyError;
+    if ([fileManager copyItemAtURL:tempFileURL toURL:[NSURL fileURLWithPath:destinationPath] error:&copyError]) {
+        NSLog(@"文件保存成功：%@", destinationPath);
+        
+        // 安装小程序资源
+        NSError *installError;
+        if ([DCUniMPSDKEngine installUniMPResourceWithAppid:appId resourceFilePath:destinationPath password:nil error:&installError]) {
+            NSLog(@"小程序 %@ 安装成功", appId);
+            self.downloadedAppId = appId;
+            
+            [self showAlertWithTitle:@"安装成功" 
+                             message:[NSString stringWithFormat:@"小程序 %@ 已安装，是否立即运行？", appId] 
+                             actions:@[@"取消", @"运行"] 
+                             handler:^(NSInteger index) {
+                if (index == 1) {
+                    [self openDownloadedUniMP:appId];
+                }
+            }];
+        } else {
+            NSLog(@"小程序安装失败：%@", installError);
+            [self showAlertWithTitle:@"安装失败" message:installError.localizedDescription];
+        }
+    } else {
+        NSLog(@"文件保存失败：%@", copyError);
+        [self showAlertWithTitle:@"保存失败" message:copyError.localizedDescription];
+    }
+}
+
+/// 打开下载的小程序
+- (void)openDownloadedUniMP:(NSString *)appId {
+    DCUniMPConfiguration *configuration = [[DCUniMPConfiguration alloc] init];
+    configuration.enableBackground = YES;
+    configuration.openMode = DCUniMPOpenModePush;
+    configuration.enableGestureClose = YES;
+    
+    __weak __typeof(self)weakSelf = self;
+    [DCUniMPSDKEngine openUniMP:appId configuration:configuration completed:^(DCUniMPInstance * _Nullable uniMPInstance, NSError * _Nullable error) {
+        if (uniMPInstance) {
+            weakSelf.uniMPInstance = uniMPInstance;
+            NSLog(@"成功打开下载的小程序：%@", appId);
+        } else {
+            NSLog(@"打开小程序出错：%@", error);
+            [weakSelf showAlertWithTitle:@"打开失败" message:error.localizedDescription];
+        }
+    }];
+}
+
+/// 显示简单提示框
+- (void)showAlertWithTitle:(NSString *)title message:(NSString *)message {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title 
+                                                                   message:message 
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction *okAction = [UIAlertAction actionWithTitle:@"确定" 
+                                                       style:UIAlertActionStyleDefault 
+                                                     handler:nil];
+    [alert addAction:okAction];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+/// 显示带多个按钮的提示框
+- (void)showAlertWithTitle:(NSString *)title 
+                   message:(NSString *)message 
+                   actions:(NSArray<NSString *> *)actionTitles 
+                   handler:(void(^)(NSInteger index))handler {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title 
+                                                                   message:message 
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+    
+    for (NSInteger i = 0; i < actionTitles.count; i++) {
+        UIAlertActionStyle style = (i == 0) ? UIAlertActionStyleCancel : UIAlertActionStyleDefault;
+        UIAlertAction *action = [UIAlertAction actionWithTitle:actionTitles[i] 
+                                                         style:style 
+                                                       handler:^(UIAlertAction * _Nonnull action) {
+            if (handler) {
+                handler(i);
+            }
+        }];
+        [alert addAction:action];
+    }
+    
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 @end
