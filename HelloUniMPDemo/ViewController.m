@@ -209,7 +209,7 @@
     // 默认下载地址（您可以替换为实际的 URL）
     NSString *downloadURL = @"https://example.com/__UNI__11E9B73.wgt";
     
-    // 弹出输入框让用户输入下载地址
+    // 弹出输入框让用户输入下载地址（AppId 将自动从文件名提取）
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"下载小程序" 
                                                                    message:@"请输入小程序 .wgt 文件的下载地址\n(AppId 将自动从文件名中提取)" 
                                                             preferredStyle:UIAlertControllerStyleAlert];
@@ -241,7 +241,7 @@
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-/// 下载 .wgt 文件
+/// 下载 .wgt 文件（AppId 自动从 URL 文件名中提取）
 - (void)downloadWgtFileFromURL:(NSString *)urlString {
     NSURL *url = [NSURL URLWithString:urlString];
     if (!url) {
@@ -250,17 +250,17 @@
     }
     
     // 从 URL 中提取文件名作为 AppId（去掉 .wgt 后缀）
-    NSString *fileName = [url.lastPathComponent stringByDeletingPathExtension];
-    if (fileName.length == 0) {
-        [self showAlertWithTitle:@"错误" message:@"无法从 URL 中提取文件名"];
+    NSString *appId = [url.lastPathComponent stringByDeletingPathExtension];
+    if (appId.length == 0) {
+        [self showAlertWithTitle:@"错误" message:@"无法从 URL 中提取 AppId，请确保 URL 以 .wgt 文件结尾"];
         return;
     }
     
-    NSLog(@"从文件名提取的 AppId: %@", fileName);
+    NSLog(@"从文件名提取的 AppId: %@", appId);
     
     // 显示加载提示
     UIAlertController *loadingAlert = [UIAlertController alertControllerWithTitle:@"下载中" 
-                                                                          message:[NSString stringWithFormat:@"正在下载小程序 %@\n请稍候...", fileName]
+                                                                          message:[NSString stringWithFormat:@"正在下载小程序 %@\n请稍候...", appId]
                                                                    preferredStyle:UIAlertControllerStyleAlert];
     [self presentViewController:loadingAlert animated:YES completion:nil];
     
@@ -271,18 +271,19 @@
     __weak __typeof(self)weakSelf = self;
     self.downloadTask = [session downloadTaskWithURL:url completionHandler:^(NSURL * _Nullable location, NSURLResponse * _Nullable response, NSError * _Nullable error) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            [loadingAlert dismissViewControllerAnimated:YES completion:nil];
-            
-            if (error) {
-                NSLog(@"下载失败：%@", error);
-                [weakSelf showAlertWithTitle:@"下载失败" message:error.localizedDescription];
-                return;
-            }
-            
-            // 获取下载的临时文件路径
-            if (location) {
-                [weakSelf installDownloadedWgt:location appId:fileName];
-            }
+            // 在 completion 回调中处理后续操作，确保弹窗完全关闭后再执行
+            [loadingAlert dismissViewControllerAnimated:YES completion:^{
+                if (error) {
+                    NSLog(@"下载失败：%@", error);
+                    [weakSelf showAlertWithTitle:@"下载失败" message:error.localizedDescription];
+                    return;
+                }
+                
+                // 获取下载的临时文件路径
+                if (location) {
+                    [weakSelf installDownloadedWgt:location appId:appId];
+                }
+            }];
         });
     }];
     
