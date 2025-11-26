@@ -207,22 +207,16 @@
 /// 从网络下载并运行小程序
 - (IBAction)downloadAndRunUniMP:(id)sender {
     // 默认下载地址（您可以替换为实际的 URL）
-    NSString *downloadURL = @"https://example.com/your-app.wgt";
-    NSString *appId = @"__UNI__DOWNLOAD"; // 从网络下载的小程序 AppId
+    NSString *downloadURL = @"https://example.com/__UNI__11E9B73.wgt";
     
     // 弹出输入框让用户输入下载地址
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"下载小程序" 
-                                                                   message:@"请输入小程序 .wgt 文件的下载地址" 
+                                                                   message:@"请输入小程序 .wgt 文件的下载地址\n(AppId 将自动从文件名中提取)" 
                                                             preferredStyle:UIAlertControllerStyleAlert];
     
     [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
-        textField.placeholder = @"https://example.com/app.wgt";
+        textField.placeholder = @"https://example.com/__UNI__11E9B73.wgt";
         textField.text = downloadURL;
-    }];
-    
-    [alert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
-        textField.placeholder = @"AppId (例如: __UNI__DOWNLOAD)";
-        textField.text = appId;
     }];
     
     UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:@"取消" 
@@ -233,12 +227,11 @@
                                                              style:UIAlertActionStyleDefault 
                                                            handler:^(UIAlertAction * _Nonnull action) {
         NSString *url = alert.textFields[0].text;
-        NSString *appid = alert.textFields[1].text;
         
-        if (url.length > 0 && appid.length > 0) {
-            [self downloadWgtFileFromURL:url appId:appid];
+        if (url.length > 0) {
+            [self downloadWgtFileFromURL:url];
         } else {
-            [self showAlertWithTitle:@"错误" message:@"请输入有效的 URL 和 AppId"];
+            [self showAlertWithTitle:@"错误" message:@"请输入有效的 URL"];
         }
     }];
     
@@ -249,16 +242,25 @@
 }
 
 /// 下载 .wgt 文件
-- (void)downloadWgtFileFromURL:(NSString *)urlString appId:(NSString *)appId {
+- (void)downloadWgtFileFromURL:(NSString *)urlString {
     NSURL *url = [NSURL URLWithString:urlString];
     if (!url) {
         [self showAlertWithTitle:@"错误" message:@"URL 格式不正确"];
         return;
     }
     
+    // 从 URL 中提取文件名作为 AppId（去掉 .wgt 后缀）
+    NSString *fileName = [url.lastPathComponent stringByDeletingPathExtension];
+    if (fileName.length == 0) {
+        [self showAlertWithTitle:@"错误" message:@"无法从 URL 中提取文件名"];
+        return;
+    }
+    
+    NSLog(@"从文件名提取的 AppId: %@", fileName);
+    
     // 显示加载提示
     UIAlertController *loadingAlert = [UIAlertController alertControllerWithTitle:@"下载中" 
-                                                                          message:@"正在下载小程序，请稍候..." 
+                                                                          message:[NSString stringWithFormat:@"正在下载小程序 %@\n请稍候...", fileName]
                                                                    preferredStyle:UIAlertControllerStyleAlert];
     [self presentViewController:loadingAlert animated:YES completion:nil];
     
@@ -279,7 +281,7 @@
             
             // 获取下载的临时文件路径
             if (location) {
-                [weakSelf installDownloadedWgt:location appId:appId];
+                [weakSelf installDownloadedWgt:location appId:fileName];
             }
         });
     }];
